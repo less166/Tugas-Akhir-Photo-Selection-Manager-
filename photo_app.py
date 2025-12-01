@@ -1,4 +1,3 @@
-# Tugas-Akhir-Photo-Selection-Manager-
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter import filedialog
@@ -86,6 +85,7 @@ class PhotoApp:
         """Sets keyboard shortcuts: Shift+1 to Shift+5 for rating, Left/Right Arrow for navigation."""
         # Rating Binding: Shift + 1 through 5
         for i in range(1, 6):
+            # Penting: Menggunakan lambda event, val=i: untuk mengatasi masalah scoping loop
             self.master.bind(f"<Shift-KeyPress-{i}>", lambda event, val=i: self.aksi_simpan_rating_shortcut(val))
 
         # Navigation Binding: Left/Right Arrow
@@ -170,17 +170,24 @@ class PhotoApp:
 
 
         # 2. Preview Frame (Center)
-        self.frame_tengah = ttk.Frame(self.frame_utama, padding="100")
-        self.frame_tengah.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+        self.frame_tengah = ttk.Frame(self.frame_utama, padding="10")
+        # PERBAIKAN: Menggunakan expand=True agar frame tengah mengisi sisa ruang
+        self.frame_tengah.pack(side=tk.LEFT, fill=tk.BOTH, expand=True) 
 
         ttk.Label(self.frame_tengah, text="PHOTO REVIEW", font=('Montserrat', 14, 'bold')).pack(pady=5)
         
-        # Label to display the image
-        self.image_label = ttk.Label(self.frame_tengah, background="#eeeeee", text="Image Preview Placeholder", relief="sunken")
-        self.image_label.pack(fill=tk.BOTH, expand=True, padx=5, pady=5, anchor='center') 
+        # FRAME GAMBAR FIXED SIZE - TIDAK PERLU FIXED SIZE KARENA AKAN MENYESUAIKAN DENGAN FRAME_TENGAH YANG EXPAND
+        # Hapus image_frame dan gunakan frame_tengah sebagai parent langsung
         
+        # Label to display the image
+        # PERBAIKAN: Ganti place() yang bermasalah dengan pack() atau grid()
+        self.image_label = ttk.Label(self.frame_tengah, background="#eeeeee", text="Image Preview Placeholder", relief="sunken")
+        # Gunakan pack dengan expand=True agar label gambar mengisi frame tengah.
+        self.image_label.pack(padx=10, pady=10, fill=tk.BOTH, expand=True) 
+
+
         # 3. Info Frame (Right)
-        self.frame_info_kanan = ttk.Frame(self.frame_utama, padding="10", width=200)
+        self.frame_info_kanan = ttk.Frame(self.frame_utama, padding="10", width=250) # Ubah width agar sama
         self.frame_info_kanan.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
         self.frame_info_kanan.pack_propagate(False) # Fixed width for Info Frame
 
@@ -205,11 +212,12 @@ class PhotoApp:
         
         # Tag Criteria Dropdown
         self.kelompok_tag_var.set("Pilih Tag") 
+        # Inisialisasi OptionMenu harus dengan tuple atau list yang benar
         self.kelompok_tag_dropdown = ttk.OptionMenu(
             self.frame_info_kanan, 
             self.kelompok_tag_var, 
-            self.kelompok_tag_var.get(), 
-            "Pilih Tag" # Initial placeholder
+            "Pilih Tag", # Nilai default
+            "Pilih Tag"  # Pilihan awal (akan di-overwrite oleh update_dropdown)
         )
         self.kelompok_tag_dropdown.pack(fill=tk.X, pady=2)
         
@@ -377,7 +385,7 @@ class PhotoApp:
             # Add to the unique tag collection list and update dropdown
             self.tag_unik_koleksi.add(tag_yang_diterapkan)
             self.update_dropdown_photo_group()
-            self.tampilkan_foto_saat_ini() # Update metadata display on the right
+            self.tampilkan_foto_saat_ini() 
         else:
             messagebox.showwarning("Warning", f"Tag '{tag_yang_diterapkan}' sudah ada di foto ini.")
             
@@ -386,18 +394,22 @@ class PhotoApp:
         """Updates the option list in the Photo Group Dropdown based on the unique tag collection."""
         tag_list = sorted(list(self.tag_unik_koleksi))
         
-        options = ["Pilih Tag"] + tag_list
-        
-        # Reset OptionMenu
+        options = ["Pilih Tag"] + tag_list        
+        # Reset OptionMenu menu
         menu = self.kelompok_tag_dropdown["menu"]
         menu.delete(0, "end")
         
-        for tag in options:
+        for tag in options:            
             menu.add_command(label=tag, command=tk._setit(self.kelompok_tag_var, tag))
 
         # Reset selection if the currently selected tag was just removed
-        if self.kelompok_tag_var.get() not in options:
+        current_selection = self.kelompok_tag_var.get()
+        if current_selection not in options:
             self.kelompok_tag_var.set("Pilih Tag")
+        # Tambahkan pembaruan jika dropdown sedang menggunakan nilai default
+        elif current_selection == "Pilih Tag" and len(options) > 1:            
+            pass
+
 
     def aksi_tombol_kelompokkan(self):
         kriteria = self.kelompok_tag_var.get().strip()
@@ -427,7 +439,9 @@ class PhotoApp:
             return
 
         # 2. BUAT SUBFOLDER KHUSUS BERDASARKAN TAG DI DALAM FOLDER YANG DIPILIH
-        nama_folder_tag = f"KOLEKSI_{kriteria_tag.upper()}"
+        # Bersihkan nama tag untuk digunakan sebagai nama folder
+        safe_tag = "".join(c for c in kriteria_tag if c.isalnum() or c in (' ', '_')).rstrip()
+        nama_folder_tag = f"KOLEKSI_{safe_tag.upper().replace(' ', '_')}"
         folder_output = os.path.join(lokasi_dasar, nama_folder_tag)
         
         if not os.path.exists(folder_output):
@@ -456,11 +470,10 @@ class PhotoApp:
         else:
             messagebox.showwarning("Not Found", f"Tidak ada foto dengan tag '{kriteria_tag}' yang ditemukan.")
 
-    # --- Navigation & Display Control Method ---
+    # --- Navigation & Display Control Method ---    
     def tampilkan_foto_saat_ini(self):
         """Loads the image, resizes it, and displays the info."""
-        if not self.koleksi_foto:
-            # This should not happen if import logic is correct, but safe check is good.
+        if not self.koleksi_foto:            
             return
 
         foto_saat_ini = self.koleksi_foto[self.index_foto_saat_ini]
@@ -468,25 +481,21 @@ class PhotoApp:
         # --- A. Display Metadata (Text Info) ---
         self.label_filename.config(text=f"File Name: {foto_saat_ini.nama_file}")
         self.label_rating.config(text=f"Rating: {foto_saat_ini.rating} / 5")
-        
-        # Update Tag display in Metadata Info (Right Panel)
+             
         self.perbarui_tampilan_tag_metadata(foto_saat_ini)
 
 
         # --- B. Display Image (Pillow Logic) ---
         try:
             img_pil = Image.open(foto_saat_ini.path_lengkap)
-            
-            # Use the size of the image_label widget as the max size for centering
-            # Use self.frame_tengah size to calculate max size for image
-            self.frame_tengah.update_idletasks()
-            max_width = self.frame_tengah.winfo_width() - 20 # Padding adjustment
-            max_height = self.frame_tengah.winfo_height() - 70 # Header and padding adjustment
-            
-            # Minimum size check
+                        
+            self.frame_tengah.update_idletasks()             
+            max_width = self.image_label.winfo_width() 
+            max_height = self.image_label.winfo_height() 
+                       
             if max_width < 100 or max_height < 100:
-                max_width = 700 
-                max_height = 600
+                 max_width = 700 
+                 max_height = 600
 
             lebar_asli, tinggi_asli = img_pil.size
             rasio_lebar = max_width / lebar_asli
@@ -538,12 +547,11 @@ class PhotoApp:
                        ).pack(side=tk.RIGHT)
 
     def aksi_hapus_tag_foto(self, tag_yang_dihapus):
-       
+        
         if not self.koleksi_foto: return
 
         foto_saat_ini = self.koleksi_foto[self.index_foto_saat_ini]
-        if foto_saat_ini.hapus_tag(tag_yang_dihapus):
-            # Recalculate global tag list to see if the tag is still used anywhere
+        if foto_saat_ini.hapus_tag(tag_yang_dihapus):            
             self.recalculate_unique_collection_tags()
             self.update_dropdown_photo_group()
             self.tampilkan_foto_saat_ini()
@@ -578,6 +586,7 @@ class PhotoApp:
         self.aksi_simpan_rating_base(nilai)
         
     def aksi_simpan_rating_shortcut(self, nilai):
+        # Karena event object dari shortcut diabaikan di base method, langsung panggil
         self.aksi_simpan_rating_base(nilai)
         
 
@@ -613,12 +622,10 @@ if __name__ == "__main__":
     # Tag Criteria Button Style (Clickable tags on the left)
     style.configure('Tag.TButton', font=('Montserrat', 10), background=COLOR_TAG_BG, foreground='#333333', borderwidth=0)
     style.map('Tag.TButton', background=[('active', '#cccccc')])
-
-    # Tag Info Frame Style (For tags displayed on the right metadata panel)
+    
     style.configure('TagInfo.TFrame', background=COLOR_TAG_BG, relief="flat", borderwidth=0)
 
-    # Make the default window background white/light grey for contrast
-    root.configure(background="#f5f5f5")
+   root.configure(background="#f5f5f5")
     
     app = PhotoApp(root)
     root.mainloop()
